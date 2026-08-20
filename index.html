@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cruscotto Sicuro</title>
+    <link rel="apple-touch-icon" href="icon-180.png">
+    <link rel="icon" type="image/png" href="icon-180.png">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #f2f2f7;
+            --card-bg: #ffffff;
+            --text-primary: #1c1c1e;
+            --text-secondary: #8e8e93;
+            --accent-saldato: #34c759;
+            --accent-dasaldare: #ff9500;
+            --accent-inps: #ffcc00;
+            --accent-invest: #5856d6;
+            --border-color: #e5e5ea;
+            --radius: 12px;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 24px 16px;
+        }
+
+        .container { max-width: 1000px; margin: 0 auto; }
+
+        header {
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        h1 { font-size: 28px; font-weight: 700; margin: 0 0 4px 0; }
+        p.subtitle { color: var(--text-secondary); font-size: 14px; margin: 0; }
+
+        .sync-status {
+            font-size: 13px;
+            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: 20px;
+            background: #e5e5ea;
+            color: var(--text-primary);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .actions-bar { display: flex; align-items: center; gap: 12px; }
+        .btn-group { display: flex; gap: 8px; align-items: center; }
+
+        .btn-icon {
+            background: #e5e5ea;
+            color: var(--text-primary);
+            border: none;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            font-size: 16px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s, transform 0.1s;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .btn-icon:hover { background: #d1d1d6; }
+        .btn-icon:active { transform: scale(0.95); }
+
+        .pwd-modal {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.25);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+
+        .pwd-card {
+            background: rgba(255, 255, 255, 0.4) !important;
+            padding: 24px;
+            border-radius: 24px;
+            width: 88%;
+            max-width: 320px;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            color: #1c1c1e;
+        }
+
+        .pwd-card h3 { color: #1c1c1e; margin: 0 0 6px 0; }
+        .pwd-card p { color: #6c6c70 !important; font-size: 13px; margin: 0 0 12px 0; }
+
+        .pwd-card input[type="password"] {
+            width: 100%;
+            padding: 12px;
+            margin: 12px 0 16px 0;
+            border: 1px solid rgba(0, 0, 0, 0.15);
+            border-radius: 12px;
+            font-size: 16px;
+            box-sizing: border-box;
+            background: rgba(255, 255, 255, 0.7);
+            outline: none;
+        }
+
+        .pwd-card button, .pwd-card button[type="submit"] {
+            width: 100%;
+            padding: 12px;
+            background-color: #5856d6 !important;
+            color: #ffffff !important;
+            border: none !important;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 14px rgba(88, 86, 214, 0.4);
+            -webkit-appearance: none;
+        }
+
+        .pwd-card button:active { background-color: #4745b8 !important; }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 32px;
+        }
+
+        .kpi-card {
+            background: var(--card-bg);
+            padding: 18px 20px;
+            border-radius: var(--radius);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            border: 1px solid var(--border-color);
+        }
+
+        .kpi-card .label {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .kpi-card .value { font-size: 24px; font-weight: 700; }
+        .kpi-card.saldato .value { color: var(--accent-saldato); }
+        .kpi-card.dasaldare .value { color: var(--accent-dasaldare); }
+        .kpi-card.inps .value { color: var(--accent-inps); }
+        .kpi-card.invest .value { color: var(--accent-invest); }
+
+        .section-card {
+            background: var(--card-bg);
+            border-radius: var(--radius);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+            border: 1px solid var(--border-color);
+            margin-bottom: 24px;
+            overflow: hidden;
+        }
+
+        .section-header {
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: white;
+            font-weight: 600;
+            font-size: 17px;
+        }
+
+        .section-header.saldato { background-color: var(--accent-saldato); }
+        .section-header.dasaldare { background-color: var(--accent-dasaldare); }
+        .section-header.inps { background-color: var(--accent-inps); color: #1c1c1e; }
+        .section-header.invest { background-color: var(--accent-invest); }
+
+        .table-container { overflow-x: auto; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 14px;
+            table-layout: fixed;
+        }
+
+        th {
+            background: #fafafa;
+            color: var(--text-secondary);
+            font-weight: 600;
+            padding: 10px 6px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        td {
+            padding: 8px 6px;
+            border-bottom: 1px solid var(--border-color);
+            vertical-align: middle;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 8px 4px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 13px;
+            box-sizing: border-box;
+            background: #fdfdfd;
+        }
+
+        .num-input {
+            text-align: right;
+            padding-right: 6px;
+            padding-left: 4px;
+        }
+
+        .month-subtotal-row { background-color: #f2f8ff; font-weight: 600; }
+        .month-subtotal-row td { color: #007aff; }
+
+        .section-footer {
+            padding: 14px 20px;
+            background: #fafafa;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .btn-add {
+            background: #e5e5ea;
+            color: #1c1c1e;
+            border: 1px solid #d1d1d6;
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .btn-add-inline {
+            background: #e5e5ea;
+            color: #1c1c1e;
+            border: 1px solid #d1d1d6;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-left: 6px;
+        }
+
+        .btn-delete { background: none; border: none; color: #ff3b30; cursor: pointer; font-size: 16px; }
+
+        @media (max-width: 600px) {
+            body { padding: 12px; }
+            header { flex-direction: row; justify-content: space-between; align-items: center; }
+            .kpi-grid { grid-template-columns: 1fr 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="pwd-modal" class="pwd-modal">
+    <div class="pwd-card">
+        <h3>Sblocco Cruscotto</h3>
+        <p>Inserisci la password per accedere.</p>
+
+        <form id="login-form" method="POST" action="javascript:void(0);" onsubmit="handlePasswordSubmit(event)">
+            <input type="text" id="username" name="username" value="cruscotto_user" autocomplete="username" style="display: none;">
+            <input type="password" id="modal-pwd-input" name="password" placeholder="Password" autocomplete="current-password" required>
+            <button type="submit">Sblocca</button>
+        </form>
+    </div>
+</div>
+
+<div class="container">
+    <header>
+        <div>
+            <h1>Cruscotto</h1>
+            <p class="subtitle">Gestione spese cifrata</p>
+        </div>
+        <div class="actions-bar">
+            <span id="sync-status" class="sync-status">☁️ Connessione...</span>
+            <div class="btn-group">
+                <button class="btn-icon" onclick="resetStoredPassword()" title="Blocca Ora">🔒</button>
+                <button class="btn-icon" onclick="exportLocalJson()" title="Esporta Backup JSON">💾</button>
+                <button class="btn-icon" onclick="document.getElementById('file-input').click()" title="Importa Backup JSON">📁</button>
+            </div>
+            <input type="file" id="file-input" accept=".json" style="display: none;" onchange="importLocalJson(event)">
+        </div>
+    </header>
+
+    <div class="kpi-grid">
+        <div class="kpi-card saldato">
+            <div class="label">Saldato</div>
+            <div class="value" id="kpi-saldato">0,00 €</div>
+        </div>
+        <div class="kpi-card dasaldare">
+            <div class="label">Da Saldare</div>
+            <div class="value" id="kpi-dasaldare">0,00 €</div>
+        </div>
+        <div class="kpi-card inps">
+            <div class="label">INPS</div>
+            <div class="value" id="kpi-inps">0,00 €</div>
+        </div>
+        <div class="kpi-card invest">
+            <div class="label">Investimenti</div>
+            <div class="value" id="kpi-invest">0,00 €</div>
+        </div>
+    </div>
+
+    <div class="section-card">
+        <div class="section-header saldato">
+            <span>1. Saldato</span>
+            <span class="total-badge" id="header-tot-saldato">0,00 €</span>
+        </div>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 24%;">Mese</th>
+                        <th style="width: 42%;">Dettaglio</th>
+                        <th style="width: 24%; text-align: right;">Importo (€)</th>
+                        <th style="width: 6%; text-align: center;">Azione</th>
+                    </tr>
+                </thead>
+                <tbody id="body-saldato"></tbody>
+            </table>
+        </div>
+        <div class="section-footer">
+            <button class="btn-add" onclick="addRow('saldato')">+ Aggiungi</button>
+            <span style="font-weight: 600;">Totale Saldato: <span id="footer-tot-saldato" style="color: var(--accent-saldato);">0,00 €</span></span>
+        </div>
+    </div>
+
+    <div class="section-card">
+        <div class="section-header dasaldare">
+            <span>2. Da Saldare</span>
+            <span class="total-badge" id="header-tot-dasaldare">0,00 €</span>
+        </div>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 24%;">Mese</th>
+                        <th style="width: 42%;">Dettaglio</th>
+                        <th style="width: 24%; text-align: right;">Importo (€)</th>
+                        <th style="width: 6%; text-align: center;">Azione</th>
+                    </tr>
+                </thead>
+                <tbody id="body-dasaldare"></tbody>
+            </table>
+        </div>
+        <div class="section-footer">
+            <button class="btn-add" onclick="addRow('daSaldare')">+ Aggiungi</button>
+            <span style="font-weight: 600;">Totale Da Saldare: <span id="footer-tot-dasaldare" style="color: var(--accent-dasaldare);">0,00 €</span></span>
+        </div>
+    </div>
+
+    <div class="section-card">
+        <div class="section-header inps">
+            <span>3. INPS</span>
+            <span class="total-badge" id="header-tot-inps">0,00 €</span>
+        </div>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 68%;">Bimestre</th>
+                        <th style="width: 6%; text-align: center;">✓</th>
+                        <th style="width: 20%; text-align: right;">Importo (€)</th>
+                        <th style="width: 6%; text-align: center;">✕</th>
+                    </tr>
+                </thead>
+                <tbody id="body-inps"></tbody>
+            </table>
+        </div>
+        <div class="section-footer">
+            <button class="btn-add" onclick="addRow('inps')">+ Aggiungi</button>
+            <span style="font-weight: 600;">Totale INPS: <span id="footer-tot-inps" style="color: #d6a100;">0,00 €</span></span>
+        </div>
+    </div>
+
+    <div class="section-card">
+        <div class="section-header invest">
+            <span>4. Investimenti</span>
+            <span class="total-badge" id="header-tot-invest">0,00 €</span>
+        </div>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width: 44%;">Voce / Conto</th>
+                        <th style="width: 16%; text-align: center;">✓</th>
+                        <th style="width: 32%; text-align: right;">Importo (€)</th>
+                        <th style="width: 8%; text-align: center;">✕</th>
+                    </tr>
+                </thead>
+                <tbody id="body-invest"></tbody>
+            </table>
+        </div>
+        <div class="section-footer">
+            <button class="btn-add" onclick="addRow('investimenti')">+ Aggiungi</button>
+            <span style="font-weight: 600;">Totale Investimenti: <span id="footer-tot-invest" style="color: var(--accent-invest);">0,00 €</span></span>
+        </div>
+    </div>
+</div>
+
+<script>
+    const BIN_ID = '6a82b26dda38895dfeedc397';
+    const ACCESS_KEY = '$2a$10$/lPB5ENirFXA1RIfMc/42elgFEO1xrJu.r8E9ZSx5ivZRPyLw/Qse';
+    const API_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
+
+    const TIMEOUT_MINUTI = 2;
+    let inactivityTimer = null;
+    let lastActivityTime = Date.now();
+
+    let data = {
+      "saldato": [],
+      "daSaldare": [],
+      "inps": [],
+      "investimenti": [],
+      "deletedItems": []
+    };
+
+    let userPassword = sessionStorage.getItem("cruscotto_pwd") || "";
+    let saveTimeout = null;
+
+    function resetInactivityTimer() {
+        lastActivityTime = Date.now();
+        if (inactivityTimer) clearTimeout(inactivityTimer);
+
+        if (userPassword) {
+            inactivityTimer = setTimeout(() => {
+                lockApp();
+            }, TIMEOUT_MINUTI * 60 * 1000);
+        }
+    }
+
+    function lockApp() {
+        sessionStorage.removeItem("cruscotto_pwd");
+        userPassword = "";
+        document.getElementById('pwd-modal').style.display = 'flex';
+        document.getElementById('modal-pwd-input').value = "";
+        setStatus("🔒 Bloccato per inattività", "#ff9500");
+    }
+
+    ['mousemove', 'mousedown', 'keypress', 'touchstart', 'scroll'].forEach(evt => {
+        window.addEventListener(evt, resetInactivityTimer, true);
+    });
+
+    document.addEventListener("visibilitychange", () => {
+        if (!document.hidden && userPassword) {
+            const elapsedMs = Date.now() - lastActivityTime;
+            if (elapsedMs > TIMEOUT_MINUTI * 60 * 1000) {
+                lockApp();
+            } else {
+                resetInactivityTimer();
+            }
+        }
+    });
+
+    function handlePasswordSubmit(e) {
+        if (e) e.preventDefault();
+        const pwdInput = document.getElementById('modal-pwd-input').value;
+        if (pwdInput) {
+            userPassword = pwdInput;
+            sessionStorage.setItem("cruscotto_pwd", userPassword);
+            document.getElementById('pwd-modal').style.display = 'none';
+            resetInactivityTimer();
+            loadFromCloud();
+        }
+    }
+
+    function resetStoredPassword() {
+        lockApp();
+    }
+
+    function encryptData(obj, pwd) {
+        return CryptoJS.AES.encrypt(JSON.stringify(obj), pwd).toString();
+    }
+
+    function decryptData(ciphertext, pwd) {
+        try {
+            const bytes = CryptoJS.AES.decrypt(ciphertext, pwd);
+            const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+            return decrypted ? JSON.parse(decrypted) : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function setStatus(text, color) {
+        const el = document.getElementById('sync-status');
+        if (el) {
+            el.textContent = text;
+            if (color) el.style.color = color;
+        }
+    }
+
+    async function loadFromCloud() {
+        if (!userPassword) {
+            document.getElementById('pwd-modal').style.display = 'flex';
+            setStatus("🔒 Inserisci Password", "#ff9500");
+            return;
+        }
+
+        setStatus("☁️ Caricamento...", "#007aff");
+
+        try {
+            const res = await fetch(`${API_URL}/latest`, { headers: { 'X-Access-Key': ACCESS_KEY } });
+            if (!res.ok) throw new Error("Errore recupero dati");
+            const result = await res.json();
+            
+            if (result.record && result.record.encrypted) {
+                const decrypted = decryptData(result.record.encrypted, userPassword);
+                if (decrypted) {
+                    data = decrypted;
+                    recalculateUI();
+                    setStatus("🟢 Sincronizzato", "#28a745");
+                } else {
+                    alert("Password errata! Impossibile decifrare.");
+                    resetStoredPassword();
+                    setStatus("🔴 Password Errata", "#dc3545");
+                }
+            }
+        } catch (err) {
+            console.error(err);
+            setStatus("🔴 Errore Cloud", "#dc3545");
+        }
+    }
+
+    function triggerAutoSave() {
+        if (!userPassword) return;
+
+        setStatus("⏳ Salvataggio...", "#ff9500");
+        clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(async () => {
+            try {
+                const encryptedPayload = { encrypted: encryptData(data, userPassword) };
+                const res = await fetch(API_URL, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', 'X-Access-Key': ACCESS_KEY },
+                    body: JSON.stringify(encryptedPayload)
+                });
+                if (!res.ok) throw new Error("Errore salvataggio");
+                setStatus("🟢 Sincronizzato", "#28a745");
+            } catch (err) {
+                console.error(err);
+                setStatus("🔴 Errore Salvataggio", "#dc3545");
+            }
+        }, 800);
+    }
+
+    function importLocalJson(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const importedData = JSON.parse(e.target.result);
+                if (importedData.saldato || importedData.daSaldare) {
+                    data = importedData;
+                    recalculateUI();
+                    triggerAutoSave();
+                    alert("Dati importati e cifrati sul Cloud!");
+                }
+            } catch (err) {
+                alert("Errore nel file JSON.");
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    async function exportLocalJson() {
+        // Formattazione della data in formato italiano GG-MM-AA
+        const ora = new Date();
+        const giorno = String(ora.getDate()).padStart(2, '0');
+        const mese = String(ora.getMonth() + 1).padStart(2, '0');
+        const anno = String(ora.getFullYear()).slice(-2);
+        const dataItaliana = `${giorno}-${mese}-${anno}`;
+
+        const fileName = `cruscotto_dati_${dataItaliana}.json`;
+        const jsonString = JSON.stringify(data, null, 2);
+
+        // 1. Prova prima con la Native File System API (permette di sovrascrivere i file esistenti)
+        if ('showSaveFilePicker' in window) {
+            try {
+                const handle = await window.showSaveFilePicker({
+                    suggestedName: fileName,
+                    types: [{
+                        description: 'File JSON',
+                        accept: { 'application/json': ['.json'] },
+                    }],
+                });
+                const writable = await handle.createWritable();
+                await writable.write(jsonString);
+                await writable.close();
+                return;
+            } catch (err) {
+                if (err.name === 'AbortError') return;
+            }
+        }
+
+        // 2. Condivisione nativa (mobile/iOS/Android)
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        if (navigator.canShare) {
+            try {
+                const file = new File([blob], fileName, { type: 'application/json' });
+                if (navigator.canShare({ files: [file] })) {
+                    await navigator.share({
+                        files: [file],
+                        title: 'Backup Cruscotto'
+                    });
+                    return;
+                }
+            } catch (err) {
+                if (err.name === 'AbortError') return;
+            }
+        }
+
+        // 3. Fallback classico tramite link di download
+        const blobUrl = URL.createObjectURL(blob);
+        const downloadAnchor = document.createElement('a');
+        downloadAnchor.href = blobUrl;
+        downloadAnchor.download = fileName;
+        document.body.appendChild(downloadAnchor);
+        downloadAnchor.click();
+        downloadAnchor.remove();
+        
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+    }
+
+    // Convertitore universale: riconosce sia il punto che la virgola come separatore decimale
+    function parseItalianNumber(val) {
+        if (typeof val === 'number') return val;
+        if (!val) return 0;
+        
+        let str = val.toString().trim();
+        if (str.includes(',') && str.includes('.')) {
+            str = str.replace(/\./g, '').replace(',', '.');
+        } else if (str.includes(',')) {
+            str = str.replace(',', '.');
+        }
+        
+        return parseFloat(str) || 0;
+    }
+
+    // Formatta un numero float in formato valuta (virgola per i decimali)
+    function formatItalianNumber(val) {
+        const num = parseItalianNumber(val);
+        return num.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+    }
+
+    function formatEuro(val) {
+        return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(val || 0);
+    }
+
+    // Genera la cella "Importo" con virgola-decimale: identica per tutte le tabelle, prima era duplicata
+    function buildImportoCellHtml(sectionKey, index, importo) {
+        return `<td><input type="text" class="num-input" value="${importo ?? ''}" oninput="this.value = this.value.replace('.', ','); updateItemValue('${sectionKey}', ${index}, 'importo', this.value); updateTotalsOnly();" onchange="formatAndSaveField('${sectionKey}', ${index}, this)"></td>`;
+    }
+
+    function renderTable(sectionKey, bodyId, isExpenseTable) {
+        const tbody = document.getElementById(bodyId);
+        if (!tbody) return;
+        tbody.innerHTML = '';
+
+        let currentMonth = null;
+        let monthSubtotal = 0;
+
+        (data[sectionKey] || []).forEach((item, index) => {
+            const numVal = parseItalianNumber(item.importo);
+
+            if (isExpenseTable) {
+                if (currentMonth && item.mese !== currentMonth) {
+                    appendSubtotalRow(tbody, currentMonth, monthSubtotal, sectionKey);
+                    monthSubtotal = 0;
+                }
+                currentMonth = item.mese;
+                monthSubtotal += numVal;
+            }
+
+            const tr = document.createElement('tr');
+            if (isExpenseTable) {
+                tr.innerHTML = `
+                    <td><input type="text" value="${item.mese || ''}" onchange="updateItem('${sectionKey}', ${index}, 'mese', this.value)" oninput="updateItemValue('${sectionKey}', ${index}, 'mese', this.value)"></td>
+                    <td><input type="text" value="${item.dettaglio || ''}" onchange="updateItem('${sectionKey}', ${index}, 'dettaglio', this.value)" oninput="updateItemValue('${sectionKey}', ${index}, 'dettaglio', this.value)"></td>
+                    ${buildImportoCellHtml(sectionKey, index, item.importo)}
+                    <td style="text-align: center;"><button class="btn-delete" onclick="deleteRow('${sectionKey}', ${index})">✕</button></td>
+                `;
+            } else if (sectionKey === 'inps' || sectionKey === 'investimenti') {
+                const keyName = sectionKey === 'inps' ? 'bimestre' : 'voce';
+                tr.innerHTML = `
+                    <td><input type="text" value="${item[keyName] || ''}" onchange="updateItem('${sectionKey}', ${index}, '${keyName}', this.value)" oninput="updateItemValue('${sectionKey}', ${index}, '${keyName}', this.value)"></td>
+                    <td style="text-align: center;">
+                        <input type="checkbox" ${item.isCompleted ? 'checked' : ''} onchange="updateItem('${sectionKey}', ${index}, 'isCompleted', this.checked)">
+                    </td>
+                    ${buildImportoCellHtml(sectionKey, index, item.importo)}
+                    <td style="text-align: center;"><button class="btn-delete" onclick="deleteRow('${sectionKey}', ${index})">✕</button></td>
+                `;
+            }
+            tbody.appendChild(tr);
+        });
+
+        if (isExpenseTable && currentMonth) {
+            appendSubtotalRow(tbody, currentMonth, monthSubtotal, sectionKey);
+        }
+    }
+
+    function appendSubtotalRow(tbody, monthName, amount, sectionKey) {
+        const tr = document.createElement('tr');
+        tr.className = 'month-subtotal-row';
+        tr.innerHTML = `
+            <td colspan="2">
+                Totale ${monthName}
+                <button class="btn-add-inline" onclick="addRowForMonth('${sectionKey}', '${monthName}')" title="Aggiungi voce a ${monthName}">+ Voce</button>
+            </td>
+            <td style="text-align: right;">${formatEuro(amount)}</td>
+            <td></td>
+        `;
+        tbody.appendChild(tr);
+    }
+
+    function updateItemValue(sectionKey, index, field, value) {
+        if (field === 'importo') {
+            const formattedVal = typeof value === 'string' ? value.replace('.', ',') : value;
+            data[sectionKey][index][field] = formattedVal;
+        } else {
+            data[sectionKey][index][field] = value;
+        }
+        triggerAutoSave();
+    }
+
+    // Normalizza il numero visivamente quando l'utente esce dal campo d'input
+    function formatAndSaveField(sectionKey, index, inputEl) {
+        const val = inputEl.value;
+        if (val && val.trim() !== "") {
+            const formatted = formatItalianNumber(val);
+            inputEl.value = formatted;
+            data[sectionKey][index]['importo'] = formatted;
+        } else {
+            data[sectionKey][index]['importo'] = val;
+        }
+        triggerAutoSave();
+        recalculateUI();
+    }
+
+    function updateItem(sectionKey, index, field, value) {
+        updateItemValue(sectionKey, index, field, value);
+        recalculateUI();
+    }
+
+    function addRow(sectionKey) {
+        const id = Date.now().toString();
+        if (sectionKey === 'saldato' || sectionKey === 'daSaldare') {
+            const lastMonth = data[sectionKey].length > 0 ? data[sectionKey][data[sectionKey].length - 1].mese : 'Nuovo Mese';
+            data[sectionKey].push({ id, mese: lastMonth, dettaglio: '', importo: '0' });
+        } else if (sectionKey === 'inps') {
+            data.inps.push({ id, bimestre: 'Nuovo Bimestre', isCompleted: false, importo: '0' });
+        } else if (sectionKey === 'investimenti') {
+            data.investimenti.push({ id, voce: 'Nuova Voce', isCompleted: false, importo: '0' });
+        }
+        recalculateUI();
+        triggerAutoSave();
+    }
+
+    function addRowForMonth(sectionKey, monthName) {
+        const id = Date.now().toString();
+        let lastIndex = -1;
+        for (let i = 0; i < data[sectionKey].length; i++) {
+            if (data[sectionKey][i].mese === monthName) lastIndex = i;
+        }
+        const newItem = { id, mese: monthName, dettaglio: '', importo: '0' };
+        if (lastIndex !== -1) {
+            data[sectionKey].splice(lastIndex + 1, 0, newItem);
+        } else {
+            data[sectionKey].push(newItem);
+        }
+        recalculateUI();
+        triggerAutoSave();
+    }
+
+    function deleteRow(sectionKey, index) {
+        const removed = data[sectionKey].splice(index, 1);
+        if (!data.deletedItems) data.deletedItems = [];
+        data.deletedItems.push(removed[0]);
+        recalculateUI();
+        triggerAutoSave();
+    }
+
+    // Configurazione unica delle sezioni: evita 20 righe ripetute di getElementById
+    const SEZIONI_TOTALI = [
+        { dataKey: 'saldato',        kpi: 'kpi-saldato',   header: 'header-tot-saldato',   footer: 'footer-tot-saldato' },
+        { dataKey: 'daSaldare',      kpi: 'kpi-dasaldare', header: 'header-tot-dasaldare', footer: 'footer-tot-dasaldare' },
+        { dataKey: 'inps',           kpi: 'kpi-inps',      header: 'header-tot-inps',      footer: 'footer-tot-inps' },
+        { dataKey: 'investimenti',   kpi: 'kpi-invest',    header: 'header-tot-invest',    footer: 'footer-tot-invest' }
+    ];
+
+    function updateTotalsOnly() {
+        SEZIONI_TOTALI.forEach(({ dataKey, kpi, header, footer }) => {
+            const totale = (data[dataKey] || []).reduce((sum, item) => sum + parseItalianNumber(item.importo), 0);
+            const testoFormattato = formatEuro(totale);
+            [kpi, header, footer].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.textContent = testoFormattato;
+            });
+        });
+    }
+
+    function recalculateUI() {
+        renderTable('saldato', 'body-saldato', true);
+        renderTable('daSaldare', 'body-dasaldare', true);
+        renderTable('inps', 'body-inps', false);
+        renderTable('investimenti', 'body-invest', false);
+        updateTotalsOnly();
+    }
+
+    const pwdInputEl = document.getElementById('modal-pwd-input');
+    if (pwdInputEl) {
+        let pwdAutoSubmitTimeout = null;
+        pwdInputEl.addEventListener('input', function() {
+            clearTimeout(pwdAutoSubmitTimeout);
+            if (this.value.length > 0) {
+                pwdAutoSubmitTimeout = setTimeout(() => {
+                    handlePasswordSubmit();
+                }, 150);
+            }
+        });
+    }
+
+    if (userPassword) {
+        document.getElementById('pwd-modal').style.display = 'none';
+        resetInactivityTimer();
+        loadFromCloud();
+    } else {
+        document.getElementById('pwd-modal').style.display = 'flex';
+    }
+</script>
+
+</body>
+</html>

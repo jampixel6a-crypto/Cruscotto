@@ -280,11 +280,6 @@
         <h3>Sblocco Cruscotto</h3>
         <p>Inserisci la password per accedere.</p>
 
-        <button type="button" id="faceid-login-btn" onclick="handleFaceIDLogin()" style="display:none; width:100%; margin-bottom:14px; padding:12px; background:#000; color:#fff; border:none; border-radius:10px; font-size:16px; font-weight:600;">
-            🆔 Sblocca con Face ID
-        </button>
-        <p id="faceid-divider" style="display:none; text-align:center; color:#8e8e93; font-size:13px; margin:10px 0;">oppure</p>
-
         <form id="login-form" method="POST" action="javascript:void(0);" onsubmit="handlePasswordSubmit(event)">
             <input type="text" id="username" name="username" value="cruscotto_user" autocomplete="username" style="display: none;">
             <input type="password" id="modal-pwd-input" name="password" placeholder="Password" autocomplete="current-password" required>
@@ -303,7 +298,6 @@
             <span id="sync-status" class="sync-status">☁️ Connessione...</span>
             <div class="btn-group">
                 <button class="btn-icon" onclick="resetStoredPassword()" title="Blocca Ora">🔒</button>
-                <button class="btn-icon" id="faceid-setup-btn" onclick="registerFaceID()" title="Configura Face ID" style="display:none;">🆔</button>
                 <button class="btn-icon" onclick="exportLocalJson()" title="Esporta Backup JSON">💾</button>
                 <button class="btn-icon" onclick="document.getElementById('file-input').click()" title="Importa Backup JSON">📁</button>
             </div>
@@ -447,45 +441,11 @@
     let userPassword = sessionStorage.getItem("cruscotto_pwd") || "";
     let saveTimeout = null;
 
-    // --- Sistema chiave dati (dataKey) per supportare Password + Face ID sugli stessi dati ---
-    // I dati vengono cifrati con una dataKey casuale; la dataKey stessa viene "avvolta"
-    // (cifrata) sia con la password sia, se configurato, con il segreto derivato da Face ID.
-    let dataKey = sessionStorage.getItem("cruscotto_datakey") || null;
-    let cloudWrappedKeyPassword = null;
-    let cloudWrappedKeyPasskey = null;
-    let cloudCredentialId = localStorage.getItem("cruscotto_credential_id") || null;
-    const PRF_SALT = new TextEncoder().encode('cruscotto-dek-salt-v1');
-
-    function bufferToHex(buf) {
-        return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-    }
-    function bufferToBase64(buf) {
-        return btoa(String.fromCharCode(...new Uint8Array(buf)));
-    }
-    function base64ToBuffer(b64) {
-        return Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-    }
-    function generateDataKey() {
-        return CryptoJS.lib.WordArray.random(32).toString();
-    }
-    function encryptRaw(str, pass) {
-        return CryptoJS.AES.encrypt(str, pass).toString();
-    }
-    function decryptRaw(ciphertext, pass) {
-        try {
-            const bytes = CryptoJS.AES.decrypt(ciphertext, pass);
-            const txt = bytes.toString(CryptoJS.enc.Utf8);
-            return txt || null;
-        } catch (e) {
-            return null;
-        }
-    }
-
     function resetInactivityTimer() {
         lastActivityTime = Date.now();
         if (inactivityTimer) clearTimeout(inactivityTimer);
 
-        if (dataKey) {
+        if (userPassword) {
             inactivityTimer = setTimeout(() => {
                 lockApp();
             }, TIMEOUT_MINUTI * 60 * 1000);
@@ -494,12 +454,9 @@
 
     function lockApp() {
         sessionStorage.removeItem("cruscotto_pwd");
-        sessionStorage.removeItem("cruscotto_datakey");
         userPassword = "";
-        dataKey = null;
         document.getElementById('pwd-modal').style.display = 'flex';
         document.getElementById('modal-pwd-input').value = "";
-        updateFaceIDButtonsVisibility();
         setStatus("🔒 Bloccato per inattività", "#ff9500");
     }
 
@@ -508,7 +465,7 @@
     });
 
     document.addEventListener("visibilitychange", () => {
-        if (!document.hidden && dataKey) {
+        if (!document.hidden && userPassword) {
             const elapsedMs = Date.now() - lastActivityTime;
             if (elapsedMs > TIMEOUT_MINUTI * 60 * 1000) {
                 lockApp();
@@ -524,6 +481,8 @@
         if (pwdInput) {
             userPassword = pwdInput;
             sessionStorage.setItem("cruscotto_pwd", userPassword);
+            document.getElementById('pwd-modal').style.display = 'none';
+            resetInactivityTimer();
             loadFromCloud();
         }
     }
@@ -554,125 +513,6 @@
         }
     }
 
-    async function registerFaceID() {
-        if (!dataKey) {
-            alert("Devi prima sbloccare con la password per configurare Face ID.");
-            return;
-        }
-        if (!window.PublicKeyCredential) {
-            alert("Il tuo browser non supporta Face ID/Passkey per questa app.");
-            return;
-        }
-        try {
-            setStatus("🆔 Configurazione Face ID...", "#007aff");
-            const challenge = crypto.getRandomValues(new Uint8Array(32));
-            const userId = crypto.getRandomValues(new Uint8Array(16));
-            const cred = await navigator.credentials.create({
-                publicKey: {
-                    challenge,
-                    rp: { name: 'Cruscotto' },
-                    user: { id: userId, name: 'cruscotto', displayName: 'Cruscotto' },
-                    pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
-                    authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required', residentKey: 'required' },
-                    extensions: { prf: {} },
-                    timeout: 60000
-                }
-            });
-            if (!cred) throw new Error("Creazione credenziale annullata");
-
-            // Secondo passaggio: richiede subito il segreto PRF derivato dalla stessa credenziale appena creata
-            const assertion = await navigator.credentials.get({
-                publicKey: {
-                    challenge: crypto.getRandomValues(new Uint8Array(32)),
-                    allowCredentials: [{ id: cred.rawId, type: 'public-key' }],
-                    userVerification: 'required',
-                    extensions: { prf: { eval: { first: PRF_SALT } } },
-                    timeout: 60000
-                }
-            });
-            const prfResult = assertion.getClientExtensionResults().prf && assertion.getClientExtensionResults().prf.results
-                ? assertion.getClientExtensionResults().prf.results.first : null;
-            if (!prfResult) {
-                alert("Il tuo dispositivo o browser non supporta la cifratura via Face ID (PRF non disponibile). La password resta il metodo di accesso.");
-                setStatus("🟢 Sincronizzato", "#28a745");
-                return;
-            }
-
-            const prfKeyHex = bufferToHex(prfResult);
-            cloudWrappedKeyPasskey = encryptRaw(dataKey, prfKeyHex);
-            cloudCredentialId = bufferToBase64(cred.rawId);
-            localStorage.setItem("cruscotto_credential_id", cloudCredentialId);
-
-            triggerAutoSave();
-            updateFaceIDButtonsVisibility();
-            alert("Face ID configurato! Da ora potrai sbloccare Cruscotto anche con Face ID, su questo e altri tuoi dispositivi Apple collegati a iCloud Keychain.");
-        } catch (err) {
-            console.error(err);
-            alert("Configurazione Face ID annullata o non riuscita.");
-            setStatus("🟢 Sincronizzato", "#28a745");
-        }
-    }
-
-    async function handleFaceIDLogin() {
-        const credId = localStorage.getItem("cruscotto_credential_id");
-        if (!credId) {
-            alert("Face ID non ancora configurato su questo dispositivo. Sblocca con la password.");
-            return;
-        }
-        try {
-            setStatus("🆔 Verifica Face ID...", "#007aff");
-            const assertion = await navigator.credentials.get({
-                publicKey: {
-                    challenge: crypto.getRandomValues(new Uint8Array(32)),
-                    allowCredentials: [{ id: base64ToBuffer(credId), type: 'public-key' }],
-                    userVerification: 'required',
-                    extensions: { prf: { eval: { first: PRF_SALT } } },
-                    timeout: 60000
-                }
-            });
-            const prfResult = assertion.getClientExtensionResults().prf && assertion.getClientExtensionResults().prf.results
-                ? assertion.getClientExtensionResults().prf.results.first : null;
-            if (!prfResult) {
-                alert("Face ID non disponibile in questo momento. Usa la password.");
-                setStatus("🔒 Inserisci Password", "#ff9500");
-                return;
-            }
-            const prfKeyHex = bufferToHex(prfResult);
-
-            const res = await fetch(`${API_URL}/latest`, { headers: { 'X-Access-Key': ACCESS_KEY } });
-            if (!res.ok) throw new Error("Errore recupero dati");
-            const result = await res.json();
-            const record = result.record;
-            if (!record || !record.wrappedKeyPasskey) {
-                alert("Face ID non risulta configurato per questi dati. Usa la password.");
-                setStatus("🔒 Inserisci Password", "#ff9500");
-                return;
-            }
-            const unwrappedKey = decryptRaw(record.wrappedKeyPasskey, prfKeyHex);
-            if (!unwrappedKey) {
-                alert("Errore nello sblocco via Face ID. Usa la password.");
-                setStatus("🔴 Errore Face ID", "#dc3545");
-                return;
-            }
-            const decrypted = decryptData(record.encrypted, unwrappedKey);
-            if (!decrypted) {
-                alert("Errore nella decifratura dei dati. Usa la password.");
-                setStatus("🔴 Errore Dati", "#dc3545");
-                return;
-            }
-            dataKey = unwrappedKey;
-            cloudWrappedKeyPassword = record.wrappedKeyPassword;
-            cloudWrappedKeyPasskey = record.wrappedKeyPasskey;
-            cloudCredentialId = record.credentialId || credId;
-            data = decrypted;
-            finalizeUnlock();
-        } catch (err) {
-            console.error(err);
-            alert("Face ID annullato o non riuscito. Usa la password.");
-            setStatus("🔒 Inserisci Password", "#ff9500");
-        }
-    }
-
     async function loadFromCloud() {
         if (!userPassword) {
             document.getElementById('pwd-modal').style.display = 'flex';
@@ -686,48 +526,18 @@
             const res = await fetch(`${API_URL}/latest`, { headers: { 'X-Access-Key': ACCESS_KEY } });
             if (!res.ok) throw new Error("Errore recupero dati");
             const result = await res.json();
-            const record = result.record;
-            if (!record) return;
-
-            if (record.wrappedKeyPassword) {
-                // --- Formato nuovo: la dataKey è avvolta dalla password ---
-                const unwrappedKey = decryptRaw(record.wrappedKeyPassword, userPassword);
-                if (!unwrappedKey) {
+            
+            if (result.record && result.record.encrypted) {
+                const decrypted = decryptData(result.record.encrypted, userPassword);
+                if (decrypted) {
+                    data = decrypted;
+                    recalculateUI();
+                    setStatus("🟢 Sincronizzato", "#28a745");
+                } else {
                     alert("Password errata! Impossibile decifrare.");
-                    lockApp();
+                    resetStoredPassword();
                     setStatus("🔴 Password Errata", "#dc3545");
-                    return;
                 }
-                const decrypted = decryptData(record.encrypted, unwrappedKey);
-                if (!decrypted) {
-                    alert("Errore nella decifratura dei dati.");
-                    lockApp();
-                    setStatus("🔴 Errore Dati", "#dc3545");
-                    return;
-                }
-                dataKey = unwrappedKey;
-                cloudWrappedKeyPassword = record.wrappedKeyPassword;
-                cloudWrappedKeyPasskey = record.wrappedKeyPasskey || null;
-                cloudCredentialId = record.credentialId || null;
-                if (cloudCredentialId) localStorage.setItem("cruscotto_credential_id", cloudCredentialId);
-                data = decrypted;
-                finalizeUnlock();
-            } else if (record.encrypted) {
-                // --- Formato legacy: dati cifrati direttamente con la password. Migrazione automatica. ---
-                const decrypted = decryptData(record.encrypted, userPassword);
-                if (!decrypted) {
-                    alert("Password errata! Impossibile decifrare.");
-                    lockApp();
-                    setStatus("🔴 Password Errata", "#dc3545");
-                    return;
-                }
-                data = decrypted;
-                dataKey = generateDataKey();
-                cloudWrappedKeyPassword = encryptRaw(dataKey, userPassword);
-                cloudWrappedKeyPasskey = null;
-                cloudCredentialId = null;
-                finalizeUnlock();
-                triggerAutoSave(); // salva subito nel nuovo formato
             }
         } catch (err) {
             console.error(err);
@@ -735,44 +545,18 @@
         }
     }
 
-    function finalizeUnlock() {
-        sessionStorage.setItem("cruscotto_datakey", dataKey);
-        document.getElementById('pwd-modal').style.display = 'none';
-        resetInactivityTimer();
-        recalculateUI();
-        updateFaceIDButtonsVisibility();
-        setStatus("🟢 Sincronizzato", "#28a745");
-    }
-
-    function updateFaceIDButtonsVisibility() {
-        const setupBtn = document.getElementById('faceid-setup-btn');
-        const loginBtn = document.getElementById('faceid-login-btn');
-        const divider = document.getElementById('faceid-divider');
-        const faceIdPossible = !!(window.PublicKeyCredential);
-        if (setupBtn) setupBtn.style.display = (dataKey && faceIdPossible) ? 'inline-flex' : 'none';
-        const hasCredential = !!localStorage.getItem("cruscotto_credential_id");
-        if (loginBtn) loginBtn.style.display = (!dataKey && faceIdPossible && hasCredential) ? 'block' : 'none';
-        if (divider) divider.style.display = (!dataKey && faceIdPossible && hasCredential) ? 'block' : 'none';
-    }
-
     function triggerAutoSave() {
-        if (!dataKey) return;
+        if (!userPassword) return;
 
         setStatus("⏳ Salvataggio...", "#ff9500");
         clearTimeout(saveTimeout);
         saveTimeout = setTimeout(async () => {
             try {
-                const payload = {
-                    encrypted: encryptData(data, dataKey),
-                    wrappedKeyPassword: cloudWrappedKeyPassword
-                };
-                if (cloudWrappedKeyPasskey) payload.wrappedKeyPasskey = cloudWrappedKeyPasskey;
-                if (cloudCredentialId) payload.credentialId = cloudCredentialId;
-
+                const encryptedPayload = { encrypted: encryptData(data, userPassword) };
                 const res = await fetch(API_URL, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json', 'X-Access-Key': ACCESS_KEY },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(encryptedPayload)
                 });
                 if (!res.ok) throw new Error("Errore salvataggio");
                 setStatus("🟢 Sincronizzato", "#28a745");
@@ -1068,7 +852,6 @@
     } else {
         document.getElementById('pwd-modal').style.display = 'flex';
     }
-    updateFaceIDButtonsVisibility();
 </script>
 
 </body>

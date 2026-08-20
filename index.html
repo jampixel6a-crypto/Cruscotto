@@ -589,7 +589,6 @@
     }
 
     async function exportLocalJson() {
-        // Formattazione della data in formato italiano GG-MM-AA
         const ora = new Date();
         const giorno = String(ora.getDate()).padStart(2, '0');
         const mese = String(ora.getMonth() + 1).padStart(2, '0');
@@ -599,7 +598,6 @@
         const fileName = `cruscotto_dati_${dataItaliana}.json`;
         const jsonString = JSON.stringify(data, null, 2);
 
-        // 1. Prova prima con la Native File System API (permette di sovrascrivere i file esistenti)
         if ('showSaveFilePicker' in window) {
             try {
                 const handle = await window.showSaveFilePicker({
@@ -618,7 +616,6 @@
             }
         }
 
-        // 2. Condivisione nativa (mobile/iOS/Android)
         const blob = new Blob([jsonString], { type: 'application/json' });
         if (navigator.canShare) {
             try {
@@ -635,7 +632,6 @@
             }
         }
 
-        // 3. Fallback classico tramite link di download
         const blobUrl = URL.createObjectURL(blob);
         const downloadAnchor = document.createElement('a');
         downloadAnchor.href = blobUrl;
@@ -647,7 +643,6 @@
         setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
     }
 
-    // Convertitore universale: riconosce sia il punto che la virgola come separatore decimale
     function parseItalianNumber(val) {
         if (typeof val === 'number') return val;
         if (!val) return 0;
@@ -662,7 +657,6 @@
         return parseFloat(str) || 0;
     }
 
-    // Formatta un numero float in formato valuta (virgola per i decimali)
     function formatItalianNumber(val) {
         const num = parseItalianNumber(val);
         return num.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -672,7 +666,6 @@
         return new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(val || 0);
     }
 
-    // Genera la cella "Importo" con virgola-decimale: identica per tutte le tabelle, prima era duplicata
     function buildImportoCellHtml(sectionKey, index, importo) {
         return `<td><input type="text" class="num-input" value="${importo ?? ''}" oninput="this.value = this.value.replace('.', ','); updateItemValue('${sectionKey}', ${index}, 'importo', this.value); updateTotalsOnly();" onchange="formatAndSaveField('${sectionKey}', ${index}, this)"></td>`;
     }
@@ -748,7 +741,6 @@
         triggerAutoSave();
     }
 
-    // Normalizza il numero visivamente quando l'utente esce dal campo d'input
     function formatAndSaveField(sectionKey, index, inputEl) {
         const val = inputEl.value;
         if (val && val.trim() !== "") {
@@ -805,7 +797,6 @@
         triggerAutoSave();
     }
 
-    // Configurazione unica delle sezioni: evita 20 righe ripetute di getElementById
     const SEZIONI_TOTALI = [
         { dataKey: 'saldato',        kpi: 'kpi-saldato',   header: 'header-tot-saldato',   footer: 'footer-tot-saldato' },
         { dataKey: 'daSaldare',      kpi: 'kpi-dasaldare', header: 'header-tot-dasaldare', footer: 'footer-tot-dasaldare' },
@@ -832,15 +823,16 @@
         updateTotalsOnly();
     }
 
+    // Gestione invio password con Opzione B (minimo 4 caratteri e pausa di 800ms)
     const pwdInputEl = document.getElementById('modal-pwd-input');
     if (pwdInputEl) {
         let pwdAutoSubmitTimeout = null;
         pwdInputEl.addEventListener('input', function() {
             clearTimeout(pwdAutoSubmitTimeout);
-            if (this.value.length > 0) {
+            if (this.value.length >= 4) {
                 pwdAutoSubmitTimeout = setTimeout(() => {
                     handlePasswordSubmit();
-                }, 150);
+                }, 800);
             }
         });
     }

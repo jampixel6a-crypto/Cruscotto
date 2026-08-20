@@ -539,8 +539,8 @@
                     recalculateUI();
                     setStatus("🟢 Sincronizzato", "#28a745");
                 } else {
-                    alert("Password errata rispetto ai dati sul Cloud! Clicca sull'icona della cartella 📁 per importare un backup e sovrascrivere il cloud con questa nuova password.");
-                    setStatus("🔴 Password Errata", "#dc3545");
+                    alert("Password errata! Impossibile decifrare.");
+                    resetStoredPassword();
                 }
             }
         } catch (err) {
@@ -583,7 +583,7 @@
                     data = importedData;
                     recalculateUI();
                     triggerAutoSave();
-                    alert("Dati importati e cifrati sul Cloud con la nuova password!");
+                    alert("Dati importati e cifrati sul Cloud con successo!");
                 }
             } catch (err) {
                 alert("Errore nel file JSON.");

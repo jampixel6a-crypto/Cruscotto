@@ -297,7 +297,7 @@
         <div class="actions-bar">
             <span id="sync-status" class="sync-status">☁️ Connessione...</span>
             <div class="btn-group">
-                <button class="btn-icon" onclick="resetStoredPassword()" title="Blocca Ora">🔒</button>
+                <button class="btn-icon" onclick="lockApp()" title="Blocca Ora">🔒</button>
                 <button class="btn-icon" onclick="exportLocalJson()" title="Esporta Backup JSON">💾</button>
                 <button class="btn-icon" onclick="document.getElementById('file-input').click()" title="Importa Backup JSON">📁</button>
             </div>
@@ -487,10 +487,6 @@
         }
     }
 
-    function resetStoredPassword() {
-        lockApp();
-    }
-
     function encryptData(obj, pwd) {
         return CryptoJS.AES.encrypt(JSON.stringify(obj), pwd).toString();
     }
@@ -540,7 +536,7 @@
                     setStatus("🟢 Sincronizzato", "#28a745");
                 } else {
                     alert("Password errata! Impossibile decifrare.");
-                    resetStoredPassword();
+                    lockApp();
                 }
             }
         } catch (err) {
@@ -568,7 +564,7 @@
                 console.error(err);
                 setStatus("🔴 Errore Salvataggio", "#dc3545");
             }
-        }, 800);
+        }, 1200);
     }
 
     function importLocalJson(event) {
@@ -650,20 +646,20 @@
     function parseItalianNumber(val) {
         if (typeof val === 'number') return val;
         if (!val) return 0;
-        
         let str = val.toString().trim();
         if (str.includes(',') && str.includes('.')) {
+            // Punto = migliaia, virgola = decimale (es. "1.234,56")
             str = str.replace(/\./g, '').replace(',', '.');
         } else if (str.includes(',')) {
+            // Solo virgola: è il decimale (es. "39,88")
             str = str.replace(',', '.');
         }
-        
+        // Solo punto (es. "39.88"): già nel formato che parseFloat capisce, nessuna modifica
         return parseFloat(str) || 0;
     }
 
     function formatItalianNumber(val) {
-        const num = parseItalianNumber(val);
-        return num.toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+        return parseItalianNumber(val).toLocaleString('it-IT', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
     }
 
     function formatEuro(val) {
@@ -671,7 +667,7 @@
     }
 
     function buildImportoCellHtml(sectionKey, index, importo) {
-        return `<td><input type="text" class="num-input" value="${importo ?? ''}" oninput="this.value = this.value.replace('.', ','); updateItemValue('${sectionKey}', ${index}, 'importo', this.value); updateTotalsOnly();" onchange="formatAndSaveField('${sectionKey}', ${index}, this)"></td>`;
+        return `<td><input type="text" class="num-input" value="${importo ?? ''}" oninput="this.value = this.value.replace('.', ','); updateItemValue('${sectionKey}', ${index}, 'importo', this.value);" onchange="formatAndSaveField('${sectionKey}', ${index}, this)"></td>`;
     }
 
     function renderTable(sectionKey, bodyId, isExpenseTable) {
@@ -697,17 +693,17 @@
             const tr = document.createElement('tr');
             if (isExpenseTable) {
                 tr.innerHTML = `
-                    <td><input type="text" value="${item.mese || ''}" onchange="updateItem('${sectionKey}', ${index}, 'mese', this.value)" oninput="updateItemValue('${sectionKey}', ${index}, 'mese', this.value)"></td>
-                    <td><input type="text" value="${item.dettaglio || ''}" onchange="updateItem('${sectionKey}', ${index}, 'dettaglio', this.value)" oninput="updateItemValue('${sectionKey}', ${index}, 'dettaglio', this.value)"></td>
+                    <td><input type="text" value="${item.mese || ''}" oninput="updateItemValue('${sectionKey}', ${index}, 'mese', this.value)"></td>
+                    <td><input type="text" value="${item.dettaglio || ''}" oninput="updateItemValue('${sectionKey}', ${index}, 'dettaglio', this.value)"></td>
                     ${buildImportoCellHtml(sectionKey, index, item.importo)}
                     <td style="text-align: center;"><button class="btn-delete" onclick="deleteRow('${sectionKey}', ${index})">✕</button></td>
                 `;
             } else if (sectionKey === 'inps' || sectionKey === 'investimenti') {
                 const keyName = sectionKey === 'inps' ? 'bimestre' : 'voce';
                 tr.innerHTML = `
-                    <td><input type="text" value="${item[keyName] || ''}" onchange="updateItem('${sectionKey}', ${index}, '${keyName}', this.value)" oninput="updateItemValue('${sectionKey}', ${index}, '${keyName}', this.value)"></td>
+                    <td><input type="text" value="${item[keyName] || ''}" oninput="updateItemValue('${sectionKey}', ${index}, '${keyName}', this.value)"></td>
                     <td style="text-align: center;">
-                        <input type="checkbox" ${item.isCompleted ? 'checked' : ''} onchange="updateItem('${sectionKey}', ${index}, 'isCompleted', this.checked)">
+                        <input type="checkbox" ${item.isCompleted ? 'checked' : ''} onchange="updateItemValue('${sectionKey}', ${index}, 'isCompleted', this.checked)">
                     </td>
                     ${buildImportoCellHtml(sectionKey, index, item.importo)}
                     <td style="text-align: center;"><button class="btn-delete" onclick="deleteRow('${sectionKey}', ${index})">✕</button></td>
@@ -736,37 +732,26 @@
     }
 
     function updateItemValue(sectionKey, index, field, value) {
-        if (field === 'importo') {
-            const formattedVal = typeof value === 'string' ? value.replace('.', ',') : value;
-            data[sectionKey][index][field] = formattedVal;
-        } else {
-            data[sectionKey][index][field] = value;
-        }
+        data[sectionKey][index][field] = value;
+        updateTotalsOnly();
         triggerAutoSave();
     }
 
     function formatAndSaveField(sectionKey, index, inputEl) {
         const val = inputEl.value;
-        if (val && val.trim() !== "") {
-            const formatted = formatItalianNumber(val);
-            inputEl.value = formatted;
-            data[sectionKey][index]['importo'] = formatted;
-        } else {
-            data[sectionKey][index]['importo'] = val;
-        }
+        const formatted = (val && val.trim() !== "") ? formatItalianNumber(val) : val;
+        inputEl.value = formatted;
+        data[sectionKey][index]['importo'] = formatted;
         triggerAutoSave();
-        recalculateUI();
-    }
-
-    function updateItem(sectionKey, index, field, value) {
-        updateItemValue(sectionKey, index, field, value);
         recalculateUI();
     }
 
     function addRow(sectionKey) {
         const id = Date.now().toString();
         if (sectionKey === 'saldato' || sectionKey === 'daSaldare') {
-            const lastMonth = data[sectionKey].length > 0 ? data[sectionKey][data[sectionKey].length - 1].mese : 'Nuovo Mese';
+            const currentMonthName = new Date().toLocaleString('it-IT', { month: 'long' });
+            const defaultMonth = currentMonthName.charAt(0).toUpperCase() + currentMonthName.slice(1);
+            const lastMonth = data[sectionKey].length > 0 ? (data[sectionKey][data[sectionKey].length - 1].mese || defaultMonth) : defaultMonth;
             data[sectionKey].push({ id, mese: lastMonth, dettaglio: '', importo: '0' });
         } else if (sectionKey === 'inps') {
             data.inps.push({ id, bimestre: 'Nuovo Bimestre', isCompleted: false, importo: '0' });

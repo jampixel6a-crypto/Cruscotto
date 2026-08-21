@@ -610,25 +610,25 @@
                 const writable = await handle.createWritable();
                 await writable.write(jsonString);
                 await writable.close();
-                return;
             } catch (err) {
-                if (err.name === 'AbortError') return;
+                if (err.name !== 'AbortError') console.error(err);
             }
+            return; // Non proseguire mai al metodo successivo: eviterebbe di salvare due file
         }
 
         const blob = new Blob([jsonString], { type: 'application/json' });
         if (navigator.canShare) {
-            try {
-                const file = new File([blob], fileName, { type: 'application/json' });
-                if (navigator.canShare({ files: [file] })) {
+            const file = new File([blob], fileName, { type: 'application/json' });
+            if (navigator.canShare({ files: [file] })) {
+                try {
                     await navigator.share({
                         files: [file],
                         title: 'Backup Cruscotto'
                     });
-                    return;
+                } catch (err) {
+                    if (err.name !== 'AbortError') console.error(err);
                 }
-            } catch (err) {
-                if (err.name === 'AbortError') return;
+                return; // Non proseguire mai al download diretto: eviterebbe di salvare due file
             }
         }
 

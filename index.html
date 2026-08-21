@@ -621,10 +621,7 @@
             const file = new File([blob], fileName, { type: 'application/json' });
             if (navigator.canShare({ files: [file] })) {
                 try {
-                    await navigator.share({
-                        files: [file],
-                        title: 'Backup Cruscotto'
-                    });
+                    await navigator.share({ files: [file] });
                 } catch (err) {
                     if (err.name !== 'AbortError') console.error(err);
                 }
